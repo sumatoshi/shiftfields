@@ -1,13 +1,12 @@
-![alt text](https://github.com/sumatoshi/shiftfields/blob/master/htmldocs/nim_chan_bless_you.png)
+![shiftfields](https://github.com/sumatoshi/shiftfields/blob/master/htmldocs/nim_chan_bless_you.png)
 
-This module implements a sugar for c-style shift fields.
-Useful in cases of buffer casting while working with file systems
-and archives in nim.
+This module implements a `ShiftField` type and sugar for c-style shift bitfields.
+Useful in cases of buffer casting while working in low-level.
 
 For example:
 ```C
-#define FLAG_A			0
-#define FLAG_B			1
+#define FLAG_A 0
+#define FLAG_B 1
 
 #define FLAG_BIT(flag, bit) ((flag >> bit) & 1)
 
@@ -16,8 +15,8 @@ For example:
 #define B_SHIFTER(flags) FLAG_BIT(flags, FLAG_B)
 
 struct c_header {
-  __le16			magic;
-  __le8			flags;
+  __le16 magic;
+  __le8  flags;
 };
 ```
 May be declared in nim as:
@@ -72,6 +71,4 @@ func contains*[T: SomeInteger](a: openArray[T], item: enum): bool
   ## This allows the `in` operator: `a.contains(item)` is the same as 
   ## `item in a`.
 ```
-
 ❗ The `getShifts` disable the `HoleEnumConv` warning in proc body. If u know how to avoid this - pr welcome.
-
