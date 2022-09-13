@@ -1,99 +1,93 @@
-## This module implements a sugar for c-style shift fields.
-## Useful in cases of buffer casting while working with filesystems
-## and archives in nim.
-##
-## For example:
-##
-## .. code-block:: C
-##   #define FLAG_A			0
-##   #define FLAG_B			1
-##
-##   #define FLAG_BIT(flag, bit) ((flag >> bit) & 1)
-##
-##   #define A_SHIFTER(flags) FLAG_BIT(flags, FLAG_A)
-##
-##   #define B_SHIFTER(flags) FLAG_BIT(flags, FLAG_B)
-##
-##   struct c_header {
-##	   __le16			magic;
-##	   __le8			flags;
-##   };
-##
-## May be declared in nim as:
-##
-## .. code-block:: Nim
-##   type
-##     Flags = enum
-##       FlagA = 0
-##       FlagB = 1
-##
-##     MySF = ShiftField[uint8]
-##
-##     NimHeader = object
-##       magic: uint16
-##       flags: MySF
-##
-##   let h = NimHeader(magic: 0'u16, flags: initShiftField[MySF](@[FlagB]))
-##
-##   assert h.flags == 0b10'u8
-##   assert not h.flags.isSet(FlagA)
-##
-##   if h.flags.isSet(FlagB):
-##     echo "(o_O) flag b is set !"
-##
-##
-## .. warning:: The `getShifts` disable the `HoleEnumConv` warning
-##    in proc body. If u know how to avoid this - pr welcome.
-##
+## This module implements a ShiftField type
+## and sugar for c-style shift bitfields.
+## Useful in cases of object casting while working with file systems.
 {.push raises: [].}
 
+from std/parseutils import parseUInt
 from std/enumutils import items
 
 
-type ShiftField*[T: SomeUnsignedInt] = T
+type
+  ShiftField*[T: SomeUnsignedInt] = T
+  flg = distinct uint8
 
 
-func initShiftField*[T: SomeUnsignedInt](s: seq[enum]): ShiftField[T] =
+proc `'flg`*(n: string): flg {.compileTime, raises:[ValueError].} =
+  ## Custom `'flg` numeric literal converter.
+  var number: uint
+  discard parseUInt(n, number)
+  result = number.flg
+
+proc `$`*(t: flg): string {.borrow.}
+  ## Borrow `$` procs from uint8.
+
+proc `<`*(x, y: flg): bool {.borrow.}
+  ## Borrow `<` procs from uint8.
+
+proc `<=`*(x, y: flg): bool {.borrow.}
+  ## Borrow `<=` procs from uint8.
+
+proc `==`*(x, y: flg): bool {.borrow.}
+  ## Borrow `==` procs from uint8.
+
+proc `==`*(x: openArray[flg], y: openArray[enum]): bool {.noinit.} =
+  ## Equality operator. Allows to compare getShifts result with flags.
+  let yord = block:
+    var br = newSeqOfCap[flg](y.len)
+    for some in y.items:
+      br.add flg(some)
+    (br)
+  return x == yord 
+
+proc `==`*(y: openArray[enum], x: openArray[flg]): bool
+          {.inline, noinit.} =
+  return x == y
+
+func initShiftField*[T: SomeUnsignedInt](s: openArray[enum]): ShiftField[T] =
   ## Initializes an `ShiftField[T]` using seq `s` values for shifting.
   let pivot = T(1)
   for shiftTo in s.items:
     result += pivot shl ord(shiftTo)
 
-func getShiftsOf*[T: SomeInteger](sf: ShiftField, e: typedesc[enum]): seq[T] =
-  ## Returns `T` typed seq of established in `sf` bits
-  ## by `e` enum shift values.
-  {.push warning[HoleEnumConv]:off.}
-
-  for enumVal in e.items:
-    let num = T(enumVal)
-    if 1 == (1 and sf shr num):
-      result.add num
-
-  {.push warning[HoleEnumConv]:on.}
-
-func getShifts*(sf: ShiftField, e: typedesc[enum]): seq[int]
-               {.inline, noinit.} =
+func getShifts*(sf: ShiftField, e: typedesc[enum]): seq[flg] =
   ## Returns `int` typed seq of established in `sf` bits
   ## by `e` enum shift values.
   runnableExamples:
-    type Flags {.pure.} = enum
-      a = 0
-      b = 1
-      c = 2
+     type Flags {.pure.} = enum
+       a = 0'flg
+       b = 1'flg
+       c = 2'flg
+ 
+     let shifts = getShifts(0b101'u8, Flags)
+     assert shifts == [a, c]
+     assert shifts == initShiftField[uint8](@[a, c]).getShifts(Flags)
 
-    let shifts = getShifts(0b101'u8, Flags)
-    assert shifts == @[0, 2]
-    assert shifts == initShiftField[uint8](@[a, c]).getShifts(Flags)
+  {.push warning[HoleEnumConv]:off.}
 
-  return getShiftsOf[int](sf, e)
+  for enumVal in e.items:
+    let num = flg(enumVal)
+    if 1 == (1 and sf shr ord(num)):
+      result.add(num)
+
+  {.push warning[HoleEnumConv]:on.}
 
 func isSet*(sf: ShiftField, e: enum): bool =
   ## Checks if an enum `e` bit contains in ShiftField `sf`.
   if 1 == (1 and sf shr ord(e)):
     result = true
 
-func contains*[T: SomeInteger](a: openArray[T], item: enum): bool
-                              {.inline, noinit.} =
+func `[]`*(sf: ShiftField, e: enum): bool {.inline, noinit.} =
+  ## Sugar alias for `isSet` func.
+  return sf.isSet(e)
+
+iterator items*(a: openArray[flg]): uint8 {.inline.} =
+  ## Base `items` iterator for flg type.
+  var i = 0
+  while i < len(a):
+    yield uint8(a[i])
+    inc(i)
+
+func contains*(a: openArray[flg], item: enum): bool {.inline, noinit.} =
   ## Returns true if `item` is in `a` or false if not found.
   ## This is a system contains **but for enum values**.
   ##
@@ -101,16 +95,18 @@ func contains*[T: SomeInteger](a: openArray[T], item: enum): bool
   ## `item in a`.
   runnableExamples:
     type Flags {.pure.} = enum
-      a = 5
-      b = 7
-      c = 9
+      a = 5'flg
+      b = 7'flg
+      c = 9'flg
 
     let shifts = getShifts(0b1000100000'u16, Flags)
     assert a in shifts
     assert b notin shifts
     assert c in shifts
 
-  return find(a, ord(item)) >= 0
+  assert sizeof(item) <= sizeof(uint8) # oh boy your enum is huge
+  return find(a, uint8(item)) >= 0
+
 #[
 
 # Wait for fix: https://github.com/nim-lang/Nim/issues/19999 
