@@ -1,8 +1,8 @@
 # Package
 
-version       = "0.1.1"
+version       = "1.0.0"
 author        = "Maxim Cege (Цеге Максим)"
-description   = "Sugar for c-style shifted bitfields"
+description   = "Sugar for bitfields"
 license       = "MIT"
 srcDir        = "src"
 
