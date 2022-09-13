@@ -37,7 +37,7 @@ test "[6c0'u16] isSet(...)":
 
 test "[6c0'u16] getShifts()":
   let shifts = getShifts(flagVal, Flags)
-  check shifts == @[6, 7, 9, 10]
+  check shifts == [f6, f7, f9, f10]
 
 test "[6c0'u16] contains()":
   let shifts = getShifts(flagVal, Flags)
