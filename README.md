@@ -1,48 +1,70 @@
 ![shiftfields](https://github.com/sumatoshi/shiftfields/blob/master/htmldocs/nim_chan_bless_you.png)
 
-This module implements a `ShiftField` type and sugar for c-style shift bitfields.
+This module implements a `ShiftField` type and `flg` distinct type and for sugar bitfields.
 Useful in cases of buffer casting while working in low-level.
 
-For example:
-```C
-#define FLAG_A 0
-#define FLAG_B 1
+### Std way vs ShiftFields
 
-#define FLAG_BIT(flag, bit) ((flag >> bit) & 1)
+[From Nim Manual](https://nim-lang.org/docs/manual.html#set-type-bit-fields):
+```nim
+type
+  MyFlag* {.size: sizeof(cint).} = enum
+    A
+    B
+    C
+    D
+  MyFlags = set[MyFlag]
 
-#define A_SHIFTER(flags) FLAG_BIT(flags, FLAG_A)
+type MyObject = object
+  flags: MyFlags # no actual size info in typedesc
 
-#define B_SHIFTER(flags) FLAG_BIT(flags, FLAG_B)
+proc toNum(f: MyFlags): int = cast[cint](f)       # what about 
+proc toFlags(v: int): MyFlags = cast[MyFlags](v)  # other flag enums?
 
-struct c_header {
-  __le16 magic;
-  __le8  flags;
-};
+assert toNum({A, C}) == 5
+assert toFlags(7) == {A, B, C}
 ```
-May be declared in nim as:
+From ShiftFields:
+```nim
+type
+  MyFlags* = enum
+    A = 0'flg
+    B = 1'flg
+    C = 2'flg
+    D = 3'flg
+
+type MyObject = object
+  flags: ShiftField[uint16]
+
+assert initSF[uint16]([A, C]) == 5
+assert ShiftField(7).getShifts(MyFlags) == [A, B, C]
+```
+More examples:
 ```nim
 type
   Flags = enum
-    FlagA = 0
-    FlagB = 1
+    FlagA = 0'flg
+    FlagB = 1'flg
 
   MySF = ShiftField[uint8]
 
   NimHeader = object
     magic: uint16
     flags: MySF
-```
-And used:
-```nim
-let h = NimHeader(magic: 0'u16, flags: initShiftField[MySF](@[FlagB]))
+
+let h = NimHeader(magic: 0'u16, flags: initSF[MySF]([FlagB]))
 
 assert h.flags == 0b10'u8
 assert not h.flags.isSet(FlagA)
 
-if h.flags.isSet(FlagB):
+if h.flags[FlagB]:
   echo "(o_O) flag b is set !"
+
+let shifts = h.flags.getShifts(Flags)
+assert FlagA notin shifts
+assert shifts == [FlagB]
 ```
-More examples in runnableExamples and tests.
+
 ### Api
 
 ```nim
@@ -50,13 +72,12 @@ func initShiftField*[T: SomeUnsignedInt](s: seq[enum]): ShiftField[T]
   ## Initializes an `ShiftField[T]` using seq `s` values for shifting.
 ```
 ```nim
-func getShifts*(sf: ShiftField, e: typedesc[enum]): seq[int]
-  ## Returns `int` typed seq of established in `sf` bits 
-  ## by `e` enum shift values.
+func initSF*[T: SomeUnsignedInt](s: seq[enum]): ShiftField[T]
+  ## Sugar alias for `initShiftField` func.
 ```
 ```nim
-func getShiftsOf*[T: SomeInteger](sf: ShiftField, e: typedesc[enum]): seq[T]
-  ## Returns `T` typed seq of established in `sf` bits 
+func getShifts*(sf: ShiftField, e: typedesc[enum]): seq[flg] =
+  ## Returns `flg` typed seq of established in `sf` bits
   ## by `e` enum shift values.
 ```
 ```nim
@@ -64,11 +85,28 @@ func isSet*(sf: ShiftField, e: enum): bool
   ## Checks if an enum `e` bit contains in ShiftField `sf`.
 ```
 ```nim
-func contains*[T: SomeInteger](a: openArray[T], item: enum): bool
+func `[]`*(sf: ShiftField, e: enum): bool =
+  ## Sugar alias for `isSet` func.
+  return sf.isSet(e)
+```
+```nim
+iterator items*(a: openArray[flg]): uint8 =
+  ## Base `items` iterator for flg type.
+```
+```nim
+func contains*(a: openArray[flg], item: enum): bool =
   ## Returns true if `item` is in `a` or false if not found.
   ## This is a system contains **but for enum values**.
   ##
-  ## This allows the `in` operator: `a.contains(item)` is the same as 
+  ## This allows the `in` operator: `a.contains(item)` is the same as
   ## `item in a`.
+```
+```nim
+proc `'flg`*(n: string): flg =
+  ## Custom `'flg` numeric literal converter.
+```
+```nim
+proc `==`*(x: openArray[flg], y: openArray[enum]): bool =
+  ## Equality operator. Allows to compare getShifts result with flags.
 ```
 ❗ The `getShifts` disable the `HoleEnumConv` warning in proc body. If u know how to avoid this - pr welcome.
