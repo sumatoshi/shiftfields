@@ -1,6 +1,6 @@
 ![shiftfields](https://github.com/sumatoshi/shiftfields/blob/master/htmldocs/nim_chan_bless_you.png)
 
-This module implements a `ShiftField` type and `flg` distinct type and for sugar bitfields.
+This module implements a `ShiftField` type and `flg` distinct type for sugar bitfields.
 Useful in cases of buffer casting while working in low-level.
 
 ### Std way vs ShiftFields
