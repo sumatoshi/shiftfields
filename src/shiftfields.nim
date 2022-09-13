@@ -49,6 +49,11 @@ func initShiftField*[T: SomeUnsignedInt](s: openArray[enum]): ShiftField[T] =
   for shiftTo in s.items:
     result += pivot shl ord(shiftTo)
 
+func initSF*[T: SomeUnsignedInt](s: openArray[enum]): ShiftField[T]
+                                {.noinit, inline.} =
+  ## Sugar alias for `initShiftField` func.
+  return initShiftField[T](s)
+
 func getShifts*(sf: ShiftField, e: typedesc[enum]): seq[flg] =
   ## Returns `int` typed seq of established in `sf` bits
   ## by `e` enum shift values.
